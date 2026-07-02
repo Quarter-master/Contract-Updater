@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contract Updater</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #181b24;
+    --card2: #1f232f;
+    --border: #2a2f3d;
+    --text: #e8eaf0;
+    --muted: #8b91a3;
+    --accent: #6c7cff;
+    --accent2: #8b5cf6;
+    --green: #34d399;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: var(--bg);
+    background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(108,124,255,.18), transparent);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px;
+  }
+  .app { width: 100%; max-width: 640px; }
+  header { text-align: center; margin-bottom: 32px; }
+  .logo {
+    width: 56px; height: 56px; margin: 0 auto 16px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    font-size: 26px; box-shadow: 0 8px 24px rgba(108,124,255,.35);
+  }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  header p { color: var(--muted); margin-top: 6px; font-size: 15px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px; margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin-bottom: 16px; font-weight: 600;
+  }
+  .card h2 .step {
+    display: inline-flex; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent); color: #fff; align-items: center; justify-content: center;
+    font-size: 11px; margin-right: 8px; vertical-align: -4px;
+  }
+
+  .drop {
+    border: 2px dashed var(--border); border-radius: 12px;
+    padding: 36px 20px; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: rgba(108,124,255,.06); }
+  .drop .icon { font-size: 34px; margin-bottom: 10px; }
+  .drop strong { display: block; font-size: 15px; margin-bottom: 4px; }
+  .drop span { color: var(--muted); font-size: 13px; }
+  #fileInput { display: none; }
+
+  .filelist { margin-top: 14px; display: none; }
+  .file-chip {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; margin-top: 8px; font-size: 14px;
+  }
+  .file-chip .ext {
+    font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 6px;
+    background: rgba(108,124,255,.18); color: var(--accent);
+  }
+  .file-chip .rm { margin-left: auto; color: var(--muted); cursor: pointer; font-size: 16px; }
+  .file-chip .rm:hover { color: var(--red); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input[type=text], input[type=email] {
+    width: 100%; padding: 11px 13px; font-size: 15px;
+    background: var(--card2); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); outline: none;
+    transition: border-color .2s;
+    -webkit-appearance: none;
+  }
+  input:focus { border-color: var(--accent); }
+  .arrow { text-align: center; color: var(--muted); align-self: end; padding-bottom: 12px; }
+  .section-label {
+    font-size: 14px; font-weight: 600; margin: 18px 0 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label:first-of-type { margin-top: 0; }
+
+  button.run {
+    width: 100%; padding: 15px; font-size: 16px; font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; border: none; border-radius: 12px; cursor: pointer;
+    box-shadow: 0 8px 24px rgba(108,124,255,.3);
+    transition: transform .15s, opacity .2s;
+  }
+  button.run:hover { transform: translateY(-1px); }
+  button.run:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  .btnrow { display: flex; gap: 12px; }
+  .btnrow .run { flex: 1.6; }
+  button.ghost {
+    flex: 1; padding: 15px; font-size: 15px; font-weight: 600;
+    background: var(--card2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+    transition: border-color .2s, opacity .2s;
+  }
+  button.ghost:hover { border-color: var(--accent); }
+  button.ghost:disabled { opacity: .4; cursor: not-allowed; }
+  button.dl-all { width: 100%; margin-top: 12px; color: var(--accent); }
+
+  .custom-row { display: grid; grid-template-columns: 1fr 1fr 32px; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .custom-row .del {
+    height: 32px; border: none; background: none; color: var(--muted);
+    font-size: 16px; cursor: pointer; border-radius: 8px;
+  }
+  .custom-row .del:hover { color: var(--red); }
+  button.add-row {
+    background: none; border: 1px dashed var(--border); color: var(--muted);
+    width: 100%; padding: 10px; border-radius: 10px; cursor: pointer;
+    font-size: 13px; transition: border-color .2s, color .2s;
+  }
+  button.add-row:hover { border-color: var(--accent); color: var(--accent); }
+
+  .results { display: none; }
+  .result-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-row .count { color: var(--muted); font-size: 13px; }
+  .result-row .ok { color: var(--green); }
+  .result-row .warn { color: var(--red); }
+  .result-row a {
+    margin-left: auto; color: var(--accent); text-decoration: none;
+    font-weight: 600; font-size: 13px; white-space: nowrap;
+  }
+  .note { color: var(--muted); font-size: 12px; margin-top: 14px; line-height: 1.5; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">&#128221;</div>
+    <h1>Contract Updater</h1>
+    <p>Swap the company name &amp; email in your contracts — right in Safari.<br>Files never leave your Mac.</p>
+  </header>
+
+  <div class="card">
+    <h2><span class="step">1</span>Add contracts</h2>
+    <div class="drop" id="drop">
+      <div class="icon">&#128193;</div>
+      <strong>Drop contracts here or click to browse</strong>
+      <span>.docx and .pdf — multiple files supported</span>
+    </div>
+    <input type="file" id="fileInput" multiple accept=".docx,.pdf">
+    <div class="filelist" id="filelist"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="step">2</span>What to change</h2>
+    <div class="section-label">&#127970; Company name</div>
+    <div class="grid">
+      <div><label>Current name</label><input type="text" id="oldName" placeholder="Acme Ltd"></div>
+      <div><label>New name</label><input type="text" id="newName" placeholder="Nova Corp"></div>
+    </div>
+    <div class="section-label">&#9993;&#65039; Email address</div>
+    <div class="grid">
+      <div><label>Current email</label><input type="email" id="oldEmail" placeholder="legal@acme.com"></div>
+      <div><label>New email</label><input type="email" id="newEmail" placeholder="legal@novacorp.com"></div>
+    </div>
+    <div class="section-label">&#128295; Additional changes <span style="color:var(--muted);font-weight:400">(addresses, names, dates&hellip;)</span></div>
+    <div id="customRows"></div>
+    <button type="button" class="add-row" id="addRow">+ Add another change</button>
+    <p class="note">Leave a pair empty to skip it. Matching is exact (case-sensitive). Your entries are remembered for next time.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="step">3</span>Update</h2>
+    <div class="btnrow">
+      <button class="ghost" id="previewBtn" disabled>Preview matches</button>
+      <button class="run" id="runBtn" disabled>Update contracts</button>
+    </div>
+    <button class="ghost dl-all" id="dlAll" style="display:none">&#8595; Download all updated files</button>
+    <div class="results" id="results"></div>
+    <p class="note" id="pdfNote" style="display:none">&#9888; Files marked with a warning: the old text is visually replaced but may still be selectable underneath (this PDF uses an encoding that can't be scrubbed). For a guaranteed clean edit, update the Word version instead.</p>
+  </div>
+
+  <footer>Everything runs locally in your browser &middot; nothing is uploaded</footer>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+/* ---------------- state ---------------- */
+let files = [];
+
+const $ = id => document.getElementById(id);
+const drop = $("drop"), fileInput = $("fileInput"), filelist = $("filelist"),
+      runBtn = $("runBtn"), results = $("results");
+
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); addFiles(e.dataTransfer.files); };
+fileInput.onchange = () => { addFiles(fileInput.files); fileInput.value = ""; };
+
+function addFiles(list) {
+  for (const f of list) {
+    const ext = f.name.toLowerCase().split(".").pop();
+    if ((ext === "docx" || ext === "pdf") && !files.some(x => x.name === f.name)) files.push(f);
+  }
+  renderFiles();
+}
+function renderFiles() {
+  filelist.style.display = files.length ? "block" : "none";
+  filelist.innerHTML = files.map((f, i) =>
+    `<div class="file-chip"><span class="ext">${f.name.toLowerCase().endsWith("pdf") ? "PDF" : "DOCX"}</span>
+     ${f.name}<span class="rm" data-i="${i}">&#10005;</span></div>`).join("");
+  filelist.querySelectorAll(".rm").forEach(el =>
+    el.onclick = () => { files.splice(+el.dataset.i, 1); renderFiles(); });
+  updateBtn();
+}
+/* ---------------- custom replacement rows ---------------- */
+const customRows = $("customRows");
+function addCustomRow(from = "", to = "") {
+  const row = document.createElement("div");
+  row.className = "custom-row";
+  row.innerHTML = `<input type="text" class="c-from" placeholder="Find…" value="">
+                   <input type="text" class="c-to" placeholder="Replace with…" value="">
+                   <button type="button" class="del" title="Remove">&#10005;</button>`;
+  row.querySelector(".c-from").value = from;
+  row.querySelector(".c-to").value = to;
+  row.querySelector(".del").onclick = () => { row.remove(); onFieldChange(); };
+  row.querySelectorAll("input").forEach(i => i.oninput = onFieldChange);
+  customRows.appendChild(row);
+}
+$("addRow").onclick = () => { addCustomRow(); };
+
+function getReps() {
+  const r = [];
+  const on = $("oldName").value.trim(), nn = $("newName").value.trim();
+  const oe = $("oldEmail").value.trim(), ne = $("newEmail").value.trim();
+  if (on && nn) r.push([on, nn]);
+  if (oe && ne) r.push([oe, ne]);
+  customRows.querySelectorAll(".custom-row").forEach(row => {
+    const f = row.querySelector(".c-from").value.trim();
+    const t = row.querySelector(".c-to").value; // allow replacing with empty
+    if (f) r.push([f, t]);
+  });
+  return r;
+}
+
+/* remember entries between visits (works when the file is opened normally in Safari) */
+const LS_KEY = "contractUpdater.v1";
+function saveState() {
+  try {
+    const custom = [...customRows.querySelectorAll(".custom-row")].map(row =>
+      [row.querySelector(".c-from").value, row.querySelector(".c-to").value]);
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      oldName: $("oldName").value, newName: $("newName").value,
+      oldEmail: $("oldEmail").value, newEmail: $("newEmail").value, custom
+    }));
+  } catch (e) { /* private browsing etc. */ }
+}
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+    ["oldName","newName","oldEmail","newEmail"].forEach(k => { if (s[k]) $(k).value = s[k]; });
+    (s.custom || []).forEach(([f, t]) => addCustomRow(f, t));
+  } catch (e) {}
+}
+function onFieldChange() { saveState(); updateBtn(); }
+["oldName","newName","oldEmail","newEmail"].forEach(id => $(id).oninput = onFieldChange);
+loadState();
+
+function updateBtn() {
+  const ready = files.length && getReps().length;
+  runBtn.disabled = !ready;
+  $("previewBtn").disabled = !ready;
+}
+updateBtn();
+
+/* ---------------- docx ---------------- */
+function escXml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function unescXml(s){return s.replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,"&");}
+
+function replaceInDocXml(xml, reps) {
+  let count = 0;
+  const out = xml.replace(/<w:p\b[\s\S]*?<\/w:p>/g, para => {
+    const tRe = /(<w:t\b[^>]*>)([\s\S]*?)(<\/w:t>)/g;
+    const texts = [];
+    let m;
+    while ((m = tRe.exec(para)) !== null) texts.push(unescXml(m[2]));
+    if (!texts.length) return para;
+    const full = texts.join("");
+    let repl = full;
+    for (const [o, n] of reps) {
+      count += full.split(o).length - 1;
+      repl = repl.split(o).join(n);
+    }
+    if (repl === full) return para;
+    let first = true;
+    return para.replace(tRe, (mm, open, txt, close) => {
+      if (first) {
+        first = false;
+        if (!/xml:space/.test(open)) open = open.replace(/<w:t/, '<w:t xml:space="preserve"');
+        return open + escXml(repl) + close;
+      }
+      return open + close;
+    });
+  });
+  return { xml: out, count };
+}
+
+async function processDocx(file, reps) {
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  let count = 0;
+  const targets = Object.keys(zip.files).filter(n =>
+    /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(n));
+  for (const name of targets) {
+    const xml = await zip.file(name).async("string");
+    const r = replaceInDocXml(xml, reps);
+    if (r.count) { zip.file(name, r.xml); count += r.count; }
+  }
+  const blob = await zip.generateAsync({ type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  return { blob, count };
+}
+
+/* ---------------- pdf ---------------- */
+// Remove the old text from the PDF's content streams (so it isn't just
+// hidden but actually gone). Handles literal and hex-encoded strings for
+// simply-encoded fonts; subset/CID-encoded text is handled by the visual
+// overlay and flagged in the residual check.
+function scrubPdfStreams(libDoc, olds) {
+  const { PDFName, PDFArray, PDFRef, PDFRawStream, decodePDFRawStream } = PDFLib;
+  const isLatin1 = s => [...s].every(c => c.charCodeAt(0) <= 255);
+  for (const page of libDoc.getPages()) {
+    const contents = page.node.get(PDFName.of("Contents"));
+    const resolved = libDoc.context.lookup(contents);
+    const refs = [];
+    if (resolved instanceof PDFArray) {
+      for (let i = 0; i < resolved.size(); i++) refs.push(resolved.get(i));
+    } else if (contents instanceof PDFRef) refs.push(contents);
+    for (const ref of refs) {
+      if (!(ref instanceof PDFRef)) continue;
+      const stream = libDoc.context.lookup(ref);
+      if (!(stream instanceof PDFRawStream)) continue;
+      let bytes;
+      try { bytes = decodePDFRawStream(stream).decode(); } catch (e) { continue; }
+      let text = "";
+      for (let i = 0; i < bytes.length; i++) text += String.fromCharCode(bytes[i]);
+      let changed = false;
+      for (const old of olds) {
+        if (!isLatin1(old)) continue;
+        if (text.includes(old)) {                    // literal string: (Acme Ltd) Tj
+          text = text.split(old).join(" ".repeat(old.length));
+          changed = true;
+        }
+        const hexLo = [...old].map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+        for (const h of [hexLo, hexLo.toUpperCase()]) { // hex string: <41636d65...> Tj
+          if (text.includes(h)) {
+            text = text.split(h).join("20".repeat(old.length));
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        const nb = new Uint8Array(text.length);
+        for (let i = 0; i < text.length; i++) nb[i] = text.charCodeAt(i) & 0xff;
+        libDoc.context.assign(ref, libDoc.context.stream(nb));
+      }
+    }
+  }
+}
+
+async function extractPdfText(bytes) {
+  const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+  let out = "";
+  for (let p = 1; p <= doc.numPages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    out += tc.items.map(i => i.str).join(" ") + "\n";
+  }
+  return out;
+}
+
+async function processPdf(file, reps) {
+  const buf = await file.arrayBuffer();
+  const jsDoc = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+  const libDoc = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+  const font = await libDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+  let count = 0;
+  const overlays = [];
+
+  // 1. locate matches + plan overlays (pdf.js has the positions)
+  for (let p = 1; p <= jsDoc.numPages; p++) {
+    const page = await jsDoc.getPage(p);
+    const tc = await page.getTextContent();
+    for (const item of tc.items) {
+      if (!item.str) continue;
+      let s = item.str, changed = false;
+      for (const [o, n] of reps) {
+        if (s.includes(o)) { count += s.split(o).length - 1; s = s.split(o).join(n); changed = true; }
+      }
+      if (changed) overlays.push({ p: p - 1, s, t: item.transform, w: item.width });
+    }
+  }
+
+  // 2. scrub old text out of the content streams
+  scrubPdfStreams(libDoc, reps.map(r => r[0]));
+
+  // 3. draw the replacement text (white patch first, in case scrub missed)
+  for (const o of overlays) {
+    const libPage = libDoc.getPage(o.p);
+    const [a, b, c, d, e, f] = o.t;
+    const size = Math.hypot(b, d) || Math.abs(d) || 11;
+    libPage.drawRectangle({
+      x: e - 1, y: f - size * 0.28,
+      width: Math.max(o.w, font.widthOfTextAtSize(o.s, size)) + 2,
+      height: size * 1.35, color: PDFLib.rgb(1, 1, 1),
+    });
+    libPage.drawText(o.s, { x: e, y: f, size, font, color: PDFLib.rgb(0, 0, 0) });
+  }
+
+  const bytes = await libDoc.save();
+
+  // 4. verify: is any old text still extractable?
+  let residual = false;
+  if (count) {
+    try {
+      const finalText = await extractPdfText(bytes.slice(0));
+      residual = reps.some(([o]) => finalText.includes(o));
+    } catch (e) { residual = true; }
+  }
+  return { blob: new Blob([bytes], { type: "application/pdf" }), count, residual };
+}
+
+/* ---------------- preview (counts matches, changes nothing) ---------------- */
+async function countMatches(file, reps) {
+  if (file.name.toLowerCase().endsWith(".pdf")) {
+    const text = await extractPdfText(new Uint8Array(await file.arrayBuffer()));
+    return reps.reduce((n, [o]) => n + (text.split(o).length - 1), 0);
+  }
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  let n = 0;
+  for (const name of Object.keys(zip.files).filter(x =>
+    /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(x))) {
+    n += replaceInDocXml(await zip.file(name).async("string"), reps).count;
+  }
+  return n;
+}
+
+$("previewBtn").onclick = async () => {
+  const reps = getReps();
+  $("previewBtn").disabled = true;
+  $("previewBtn").textContent = "Scanning…";
+  results.style.display = "block";
+  results.innerHTML = "";
+  $("dlAll").style.display = "none";
+  for (const file of files) {
+    const row = document.createElement("div");
+    row.className = "result-row";
+    row.innerHTML = `<span>${file.name}</span><span class="count">scanning…</span>`;
+    results.appendChild(row);
+    try {
+      const n = await countMatches(file, reps);
+      row.innerHTML = n
+        ? `<span class="ok">&#9678;</span><span>${file.name}</span>
+           <span class="count">${n} match${n > 1 ? "es" : ""} found</span>`
+        : `<span class="warn">&#9679;</span><span>${file.name}</span>
+           <span class="count">no matches</span>`;
+    } catch (err) {
+      row.innerHTML = `<span class="warn">&#10007;</span><span>${file.name}</span>
+                       <span class="count">error: ${err.message}</span>`;
+    }
+  }
+  $("previewBtn").textContent = "Preview matches";
+  updateBtn();
+};
+
+/* ---------------- run ---------------- */
+runBtn.onclick = async () => {
+  const reps = getReps();
+  runBtn.disabled = true;
+  runBtn.textContent = "Working…";
+  results.style.display = "block";
+  results.innerHTML = "";
+  $("dlAll").style.display = "none";
+  let anyPdf = false;
+  const downloads = [];
+
+  for (const file of files) {
+    const isPdf = file.name.toLowerCase().endsWith(".pdf");
+    const row = document.createElement("div");
+    row.className = "result-row";
+    row.innerHTML = `<span>${file.name}</span><span class="count">processing…</span>`;
+    results.appendChild(row);
+    try {
+      const r = isPdf ? await processPdf(file, reps) : await processDocx(file, reps);
+      if (isPdf && r.residual) anyPdf = true;
+      const outName = file.name.replace(/(\.\w+)$/, "_updated$1");
+      const url = URL.createObjectURL(r.blob);
+      if (r.count) downloads.push({ url, name: outName });
+      const flag = r.residual ? ` <span class="warn">&#9888;</span>` : "";
+      row.innerHTML = r.count
+        ? `<span class="ok">&#10003;</span><span>${file.name}</span>
+           <span class="count">${r.count} replacement${r.count > 1 ? "s" : ""}${flag}</span>
+           <a href="${url}" download="${outName}">Download &#8595;</a>`
+        : `<span class="warn">&#9679;</span><span>${file.name}</span>
+           <span class="count">no matches found</span>`;
+    } catch (err) {
+      row.innerHTML = `<span class="warn">&#10007;</span><span>${file.name}</span>
+                       <span class="count">error: ${err.message}</span>`;
+    }
+  }
+  $("pdfNote").style.display = anyPdf ? "block" : "none";
+  if (downloads.length > 1) {
+    $("dlAll").style.display = "block";
+    $("dlAll").onclick = () => {
+      downloads.forEach((d, i) => setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = d.url; a.download = d.name;
+        document.body.appendChild(a); a.click(); a.remove();
+      }, i * 300));
+    };
+  }
+  runBtn.textContent = "Update contracts";
+  updateBtn();
+};
+</script>
+</body>
+</html>
